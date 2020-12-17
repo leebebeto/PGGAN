@@ -39,21 +39,27 @@ while step < total_step:
 	# alpha_compo = 0.0
 	real_image, _ = next(iter(train_data.train_loader))
 	real_image = real_image.to(device)
-	latent_vector = torch.FloatTensor(train_data.batch_size, args.z_dim, 1, 1).to(device)
+	# latent_vector = torch.FloatTensor(train_data.batch_size, args.z_dim).to(device)
+	latent_vector = torch.rand(train_data.batch_size, args.z_dim).to(device)
 	real_label, fake_label = torch.ones(train_data.batch_size, 1).to(device), torch.zeros(train_data.batch_size, 1).to(device)
 	# save_image(real_image, f'real_image_{step}_{train_data.rindex}.png', normalize=True)
 	# initialize for the first block
 	if train_data.rindex == 0:
 		flag_add = False
+
+		# print(list(generator.parameters())[0])
+		# import pdb;
+		# pdb.set_trace()
+
 		# adding network
 		if step % (args.stab_iter*2) == 0:
 			print('adding first block')
-			fake_image = generator(latent_vector, train_data.rindex, flag_add=True)
+			fake_image = generator(latent_vector.unsqueeze(2).unsqueeze(2), train_data.rindex, flag_add=True)
 			real_pred = discriminator(real_image, train_data.rindex, flag_add=True)
 			fake_pred = discriminator(fake_image, train_data.rindex)
 
 		else:
-			fake_image = generator(latent_vector, train_data.rindex)
+			fake_image = generator(latent_vector.unsqueeze(2).unsqueeze(2), train_data.rindex)
 			real_pred = discriminator(real_image, train_data.rindex)
 			fake_pred = discriminator(fake_image, train_data.rindex)
 
@@ -69,11 +75,11 @@ while step < total_step:
 			alpha_compo = (step - (train_data.rindex * args.stab_iter * 2)) / (args.stab_iter)
 			if step % (train_data.rindex * (2*args.stab_iter)) == 0:
 				print('---------------- adding & growing network ----------------')
-				fake_image = generator(latent_vector, train_data.rindex, flag_add=True, alpha_compo=0)
+				fake_image = generator(latent_vector.unsqueeze(2).unsqueeze(2), train_data.rindex, flag_add=True, alpha_compo=0)
 				real_pred = discriminator(real_image, train_data.rindex, flag_add=True, alpha_compo=0)
 				fake_pred = discriminator(fake_image, train_data.rindex)
 			else:
-				fake_image = generator(latent_vector, train_data.rindex, flag_grow=True, alpha_compo= alpha_compo)
+				fake_image = generator(latent_vector.unsqueeze(2).unsqueeze(2), train_data.rindex, flag_grow=True, alpha_compo= alpha_compo)
 				real_pred = discriminator(real_image, train_data.rindex, flag_grow=True, alpha_compo= alpha_compo)
 				fake_pred = discriminator(fake_image, train_data.rindex, flag_grow=True, alpha_compo= alpha_compo)
 			print('alpha: {}, step: {}, rindex: {}, real_image: {}, fake_image: {} real_pred: {}, fake_pred: {}'.format(alpha_compo, step, train_data.rindex, real_image.shape, fake_image.shape, real_pred.shape, fake_pred.shape))
@@ -84,17 +90,23 @@ while step < total_step:
 			alpha_compo = 1.0
 			if step % ((train_data.rindex * (2*args.stab_iter)) + args.stab_iter) == 0:
 				print('---------------- stabilize network ----------------')
-			fake_image = generator(latent_vector, train_data.rindex, flag_grow=True, alpha_compo= alpha_compo)
+			fake_image = generator(latent_vector.unsqueeze(2).unsqueeze(2), train_data.rindex, flag_grow=True, alpha_compo= alpha_compo)
 			real_pred = discriminator(real_image, train_data.rindex, flag_grow=True, alpha_compo= alpha_compo)
 			fake_pred = discriminator(fake_image, train_data.rindex, flag_grow=True, alpha_compo= alpha_compo)
 			print('alpha: {}, step: {}, rindex: {}, real_image: {}, fake_image: {} real_pred: {}, fake_pred: {}'.format(alpha_compo, step, train_data.rindex, real_image.shape, fake_image.shape, real_pred.shape, fake_pred.shape))
 			# print(alpha_compo)
 
-	# # print('alpha_compo', alpha_compo)
+	# print('real_pred', real_pred)
+	# print('fake_pred', fake_pred)
+	# print(fake_image)
+	# save_image(fake_image, f'fake_image_{train_data.rindex}_{step}.png', normalize=True)
+	# import pdb; pdb.set_trace()
 	#
-	# # update discriminator
+	# # # print('alpha_compo', alpha_compo)
+	# #
+	# # # update discriminator
 	d_real_loss = criterion(real_pred, real_label)
-	d_fake_loss = criterion(fake_pred, fake_label)
+	d_fake_loss = criterion(fake_pred.detach(), fake_label)
 
 	if step % 10 == 0:
 		print('real_pred', real_pred)
@@ -109,24 +121,26 @@ while step < total_step:
 	d_loss.backward(retain_graph=True)
 	d_optimizer.step()
 
-	fake_pred_new = fake_pred.detach().clone()
-	fake_pred_new.requires_grad = True
-
-	g_loss = criterion(fake_pred_new, real_label)
+	# fake_pred_new = fake_pred.detach().clone()
+	# fake_pred_new.requires_grad = True
+	alpha_compo=0.0
+	fake_pred = discriminator(fake_image, train_data.rindex, flag_grow=True, alpha_compo=alpha_compo)
+	g_loss = criterion(fake_pred, real_label)
 	g_optimizer.zero_grad()
 	g_loss.backward()
 	g_optimizer.step()
-
+	#
 	print(real_image)
 	save_image(real_image, f'real_image_{step}.png', normalize=True)
 	print(fake_image)
 	save_image(fake_image, f'fake_image_{step}.png', normalize=True)
-
+	#
 	print('d_loss: {}, g_loss: {}'.format(d_loss, g_loss))
-	# growing the image resolution
-
-	# print('generator', generator)
-	# print('discriminator', discriminator)
+	# import pdb; pdb.set_trace()
+	# # growing the image resolution
+	#
+	# # print('generator', generator)
+	# # print('discriminator', discriminator)
 
 	if step > 0 and (step+1) % (args.stab_iter*2) == 0:
 		print('Increasing resolution index: ', train_data.rindex)
