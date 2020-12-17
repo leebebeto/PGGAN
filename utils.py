@@ -15,8 +15,8 @@ class Minibatch_std(nn.Module):
         super(Minibatch_std, self).__init__()
 
     def forward(self, x):
-        new_layer = torch.std(x, dim=0, keepdim=True)
-        output = torch.cat((x, new_layer), dim=1)
+        new_layer = torch.mean(torch.std(x, dim=0), dim=0)
+        output = torch.cat((x, new_layer.expand(x.shape[0], 1, x.shape[2], x.shape[3])), dim=1)
         return output
 
 def conv(c_in, c_out, k_size=3, stride=1, pad=0, act='leaky', norm='pixel', size_up=None, bias=False, pixel=True):
@@ -48,7 +48,7 @@ def conv(c_in, c_out, k_size=3, stride=1, pad=0, act='leaky', norm='pixel', size
 
 def toRGB(c_in):
     layers = conv(c_in, 3, k_size=1, stride=1, pad=0, act='none', norm=None)
-    layers.append(nn.Tanh())
+    # layers.append(nn.Tanh())
     return layers
 
 def fromRGB(c_out):

@@ -96,6 +96,7 @@ while step < total_step:
 			print('alpha: {}, step: {}, rindex: {}, real_image: {}, fake_image: {} real_pred: {}, fake_pred: {}'.format(alpha_compo, step, train_data.rindex, real_image.shape, fake_image.shape, real_pred.shape, fake_pred.shape))
 			# print(alpha_compo)
 
+	# fake_pred_new = fake_pred.clone()
 	# print('real_pred', real_pred)
 	# print('fake_pred', fake_pred)
 	# print(fake_image)
@@ -105,15 +106,10 @@ while step < total_step:
 	# # # print('alpha_compo', alpha_compo)
 	# #
 	# # # update discriminator
+	alpha_compo = (step - (train_data.rindex * args.stab_iter * 2)) / (args.stab_iter)
+
 	d_real_loss = criterion(real_pred, real_label)
 	d_fake_loss = criterion(fake_pred.detach(), fake_label)
-
-	if step % 10 == 0:
-		print('real_pred', real_pred)
-		print('fake_pred', fake_pred)
-		save_image(fake_image, 'fake_image_{}.png'.format(step), normalize=True)
-		# print('growing, step: {}, alpha_compo: {}, rindex: {}, real_image: {}, fake_image: {} real_pred: {}, fake_pred: {}'.format(step, alpha_compo, train_data.rindex, real_image.shape, fake_image.shape, real_pred.shape, fake_pred.shape))
-		print('growing, step: {}, rindex: {}, real_image: {}, fake_image: {} real_pred: {}, fake_pred: {}'.format(step, train_data.rindex, real_image.shape, fake_image.shape, real_pred.shape, fake_pred.shape))
 
 	# d_loss = 0.5 * (d_real_loss + d_fake_loss)
 	d_loss = d_real_loss + d_fake_loss
@@ -123,24 +119,31 @@ while step < total_step:
 
 	# fake_pred_new = fake_pred.detach().clone()
 	# fake_pred_new.requires_grad = True
-	alpha_compo=0.0
+	# alpha_compo=0.0
 	fake_pred = discriminator(fake_image, train_data.rindex, flag_grow=True, alpha_compo=alpha_compo)
 	g_loss = criterion(fake_pred, real_label)
 	g_optimizer.zero_grad()
 	g_loss.backward()
 	g_optimizer.step()
 	#
-	print(real_image)
-	save_image(real_image, f'real_image_{step}.png', normalize=True)
-	print(fake_image)
-	save_image(fake_image, f'fake_image_{step}.png', normalize=True)
+	# print(real_image)
+	# save_image(real_image, f'real_image_{step}.png', normalize=True)
+	# print(fake_image)
+	# save_image(fake_image, f'fake_image_{step}.png', normalize=True)
 	#
-	print('d_loss: {}, g_loss: {}'.format(d_loss, g_loss))
+	# print('d_loss: {}, g_loss: {}'.format(d_loss, g_loss))
 	# import pdb; pdb.set_trace()
 	# # growing the image resolution
 	#
 	# # print('generator', generator)
 	# # print('discriminator', discriminator)
+	if step % 10 == 0:
+		print('real_pred', real_pred)
+		print('fake_pred', fake_pred)
+		save_image(fake_image, 'fake_image_{}.png'.format(step), normalize=True)
+		# print('growing, step: {}, alpha_compo: {}, rindex: {}, real_image: {}, fake_image: {} real_pred: {}, fake_pred: {}'.format(step, alpha_compo, train_data.rindex, real_image.shape, fake_image.shape, real_pred.shape, fake_pred.shape))
+		print('growing, alpha: {}, step: {}, rindex: {}, fake_image: {}, d_loss: {}, g_loss: {}'.format(alpha_compo, step, train_data.rindex, fake_image.shape, d_loss, g_loss))
+
 
 	if step > 0 and (step+1) % (args.stab_iter*2) == 0:
 		print('Increasing resolution index: ', train_data.rindex)

@@ -209,9 +209,10 @@ class Discriminator(nn.Module):
 
 		# forward to last linear layer
 		x = output.view(output.shape[0], -1)
-		x = self.linear(x)
-
-		output = nn.Sigmoid()(x)
+		output = self.linear(x)
+		# x = self.linear(x)
+		#
+		# output = nn.Sigmoid()(x)
 		return output
 
 
