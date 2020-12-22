@@ -53,7 +53,6 @@ def conv(c_in, c_out, k_size=3, stride=1, pad=0, act='leaky', norm='pixel', size
 
 def toRGB(c_in):
     layers = conv(c_in, 3, k_size=1, stride=1, pad=0, act='none', norm=None)
-    # layers.append(nn.Tanh())
     return layers
 
 def fromRGB(c_out):

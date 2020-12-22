@@ -201,5 +201,25 @@ class Discriminator(nn.Module):
 
 
 if __name__ == '__main__':
-	generator = Generator()
-	random_tensor = torch.randn(4, 512, 4, 4)
+	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+	rindex = 0
+	generator = Generator(4, 512).to(device)
+	discriminator = Discriminator(512).to(device)
+
+	generator = nn.DataParallel(generator)
+	discriminator = nn.DataParallel(discriminator)
+
+	batch_size = 4
+	real_image = torch.randn(batch_size, 3, 4, 4).to(device)
+	latent_vector = torch.randn(batch_size, 512, 1, 1).to(device)
+	real_label, fake_label = torch.ones(batch_size).to(device), torch.zeros(batch_size).to(device)
+
+	rindex += 1
+	generator.module.add_new_layer(generator, latent_vector, rindex)
+	discriminator.module.add_new_layer(discriminator, real_image, rindex)
+
+	print('generator', generator)
+	print('discriminator', discriminator)
+
+	import pdb; pdb.set_trace()

@@ -1,4 +1,6 @@
 import os
+import datetime
+import time
 
 from config import arg_parse
 from data import *
@@ -10,6 +12,8 @@ import torch
 import torch.nn as nn
 import torch.utils.data
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
+
 from torchvision import transforms
 from torchvision.utils import save_image
 
@@ -30,22 +34,24 @@ d_optimizer = optim.Adam(discriminator.parameters(), lr = args.lr, betas = (0, 0
 # criterion = nn.MSELoss()
 criterion = nn.BCELoss()
 
-# making logging folders
+# making logging folders/tensorboard
 os.makedirs('random_images', exist_ok=True)
 os.makedirs('fixed_images', exist_ok=True)
 os.makedirs('model', exist_ok=True)
+writer = SummaryWriter()
 
 
 step = 0
 total_step = 9 * (2 * args.stab_iter)
 train_data.renew(initial=True)
-fixed_vector = torch.FloatTensor(train_data.batch_size, args.z_dim, 1, 1).to(device)
+fixed_vector = torch.randn(train_data.batch_size, args.z_dim, 1, 1).to(device)
 
 if args.retrain:
 	generator.load_state_dict(torch.load( f'model/generator_{args.retrain_resol}*{args.retrain_resol}_latest.pt'))
 	discriminator.load_state_dict(torch.load( f'model/discriminator_{args.retrain_resol}*{args.retrain_resol}_latest.pt'))
 
 print(f'Start training PGGAN with total_step of {total_step}')
+prev_time = time.time()
 while step < total_step:
 
 	# clear accumulated gradients
@@ -61,10 +67,6 @@ while step < total_step:
 	real_image = real_image.to(device)
 	latent_vector = torch.randn(train_data.batch_size, args.z_dim, 1, 1).to(device)
 	real_label, fake_label = torch.ones(train_data.batch_size).to(device), torch.zeros(train_data.batch_size).to(device)
-
-	# flags for adding network -> add only if step == grow_start
-	flag_add= False
-	if grow_start>0 and step % grow_start ==0: flag_add = True
 
 	# alpha compo with grow/stabilize stage
 	alpha_compo = (step - (grow_start))/args.stab_iter
@@ -101,8 +103,18 @@ while step < total_step:
 	##################################################
 	################### LOGGING ######################
 	##################################################
+	step_left = total_step - step_left
+	time_took = time.time() - prev_time
+	time_left = datetime.timedelta(seconds=step_left * (time_took))
+	prev_time = time.time()
+
 	if step % args.print_freq == 0:
-		print(f'growing, step: {step}, rindex: {train_data.rindex}, d_loss: {d_loss}, g_loss: {g_loss}')
+		print(f'step: {step}, alpha: {alpha_compo}, rindex: {train_data.rindex}, d_loss: {d_loss:.4f}, g_loss: {g_loss:.4f}, time took: {time_took:.4f}, time left: {time_left:.4f}')
+
+		writer.add_scalar("d_loss/step", d_loss.item(), step)
+		writer.add_scalar("g_loss/step", g_loss.item(), step)
+		writer.add_scalar("time/step", time_took, step)
+		writer.add_scalar("alpha_compo/step", alpha_compo, step)
 
 	if step % args.save_image_freq == 0:
 		#saving random images

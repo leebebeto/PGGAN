@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="jungsoolee@143.248.159.123:8022">
+  <component name="PublishConfigData" autoUpload="Always" serverName="jungsoolee@163.152.29.197:22">
     <serverData>
       <paths name="jungsoolee@143.248.159.123:8022">
         <serverdata>
           <mappings>
             <mapping deploy="/home/nas1_userE/jungsoolee/PGGAN" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="jungsoolee@163.152.29.197:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/PGGAN" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
