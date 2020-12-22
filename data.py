@@ -14,8 +14,8 @@ class Celeb_HQ(Dataset):
         0: 4 / 1: 8 / 2: 16 / 3: 32 / 4: 64 / 5: 128 / 6: 256 / 7: 512 / 8: 1024
         '''
         self.rindex = rindex
-        # self.rindex2batch = {0: 16, 1: 16, 2: 16, 3: 16, 4: 16, 5: 16, 6: 8, 7: 4, 8: 3}
-        self.rindex2batch = {0: 4, 1: 4, 2: 4, 3: 4, 4: 4, 5: 2, 6: 2, 7: 2, 8: 1}
+        self.rindex2batch = {0: 16, 1: 16, 2: 16, 3: 16, 4: 16, 5: 4, 6: 4, 7: 1, 8: 1}
+        # self.rindex2batch = {0: 4, 1: 4, 2: 4, 3: 4, 4: 4, 5: 2, 6: 2, 7: 2, 8: 1}
         self.batch_size = self.rindex2batch[self.rindex]
         self.resolution = pow(2, (self.rindex+2))
         self.len = len(self.train_images)
@@ -37,13 +37,8 @@ class Celeb_HQ(Dataset):
         self.train_loader = DataLoader(dataset=self.dataset,
                                       batch_size = self.batch_size,
                                       shuffle = True,
-                                      drop_last = True)
-
-
-    # def __getitem__(self, index):
-    #     image = Image.open(self.train_images[index]).convert('RGB')
-    #     image = self.transform(image)
-    #     return image
+                                      drop_last = True,
+                                      num_workers = 8)
 
     def __len__(self):
         return self.len
