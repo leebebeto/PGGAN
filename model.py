@@ -1,8 +1,11 @@
+from utils import *
+
 import torch
+import torch.nn as nn
 from torch import optim
 import torchvision
-import torch.nn as nn
-from utils import *
+from torchvision.utils import save_image
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -11,6 +14,10 @@ class Generator(nn.Module):
 		super(Generator, self).__init__()
 		self.stab_iter = stab_iter
 		self.ngf = ngf
+
+		# channel dictionary
+		self.rindex2ch = [self.ngf,self.ngf,self.ngf,self.ngf,
+						  self.ngf,int(self.ngf/2),int(self.ngf/4),int(self.ngf/8),int(self.ngf/16)]
 
 		# adding first block
 		first_block = []
@@ -30,34 +37,33 @@ class Generator(nn.Module):
 		self.to_rgb = nn.Sequential()
 		self.to_rgb.add_module('{}_rgb'.format(0), to_rgb_layers)
 
-	def add_new_layer(self, generator, x, rindex, flag_half=False):
-		# forward to existing conv layers
-		x = self.conv_layers(x)
+	def add_new_layer(self, rindex, flag_half=False):
+		ch = self.rindex2ch[rindex]
 
 		# make new conv layers
 		new_conv = []
 		if flag_half:
-			new_conv += conv(x.shape[1], int(x.shape[1]/2), 3, 1, 1, size_up='up')
-			new_conv += conv(int(x.shape[1]/2), int(x.shape[1]/2), 3, 1, 1)
+			new_conv += conv(ch, int(ch/2), 3, 1, 1, size_up='up')
+			new_conv += conv(int(ch/2), int(ch/2), 3, 1, 1)
+			rgb_ch = int(ch/2)
 		else:
-			new_conv += conv(x.shape[1], x.shape[1], 3, 1, 1, size_up='up')
-			new_conv += conv(x.shape[1], x.shape[1], 3, 1, 1)
+			new_conv += conv(ch, ch, 3, 1, 1, size_up='up')
+			new_conv += conv(ch, ch, 3, 1, 1)
+			rgb_ch = ch
+
 		new_conv = nn.Sequential(*new_conv).to(device)
 
 		# add new conv layers
-		generator.module.conv_layers.add_module('{}_block'.format(rindex), new_conv)
-		x = self.conv_layers[-1](x)
+		self.conv_layers.add_module('{}_block'.format(rindex), new_conv)
 
 		# make new to_rgb layers
-		to_rgb_layers = toRGB(x.shape[1])
+		to_rgb_layers = toRGB(rgb_ch)
 		to_rgb_layers = nn.Sequential(*to_rgb_layers).to(device)
 
 		# add new to_rgb layers
-		generator.module.to_rgb.add_module('{}_rgb'.format(rindex), to_rgb_layers)
-		output = self.to_rgb[-1](x)
-		return output
+		self.to_rgb.add_module('{}_rgb'.format(rindex), to_rgb_layers)
 
-	def grow_stab(self, x, rindex, alpha_compo, flag_half=False):
+	def grow_stab(self, x, rindex, alpha_compo):
 		# forward until last two conv layers
 		for layer in self.conv_layers[:-1]:
 			x = layer(x)
@@ -79,11 +85,8 @@ class Generator(nn.Module):
 			x = self.conv_layers(x)
 			output = self.to_rgb(x)
 
-		elif rindex >= 1 and rindex <=3:
+		else:
 			output = self.grow_stab(x, rindex, alpha_compo)
-
-		elif rindex >=4:
-			output = self.grow_stab(x, rindex, alpha_compo, flag_half=True)
 
 		output = nn.Tanh()(output)
 		return output
@@ -93,6 +96,11 @@ class Discriminator(nn.Module):
 	def __init__(self, ndf):
 		super(Discriminator, self).__init__()
 		self.ndf = ndf
+
+		# channel dictionary
+		self.rindex2ch = [self.ndf,self.ndf,self.ndf,self.ndf,
+						  self.ndf,int(self.ndf/2),int(self.ndf/4), int(self.ndf/8),int(self.ndf/16)]
+
 
 		# adding last conv block
 		last_block = []
@@ -115,8 +123,9 @@ class Discriminator(nn.Module):
 		# last linear layer
 		self.linear = nn.Linear(ndf, 1)
 
-	def add_new_layer(self, discriminator, x, rindex, flag_double=False):
-		x = nn.Upsample(scale_factor=2, mode='nearest')(x)
+	def add_new_layer(self, rindex, flag_double=False):
+		ch = self.rindex2ch[rindex]
+
 		# make new from_rgb layers
 		if flag_double:
 			denom = pow(2, rindex-3)
@@ -126,59 +135,49 @@ class Discriminator(nn.Module):
 
 		# add new from_rgb layers
 		from_rgb_layers = nn.Sequential(*from_rgb_layers).to(device)
-		discriminator.module.from_rgb.add_module('{}_rgb'.format(9-rindex), from_rgb_layers)
-
-		# forward to new from_rgb layers
-		x = self.from_rgb[-1](x)
+		self.from_rgb.add_module('{}_rgb'.format(9-rindex), from_rgb_layers)
 
 		# make new conv layers
 		new_conv = []
 		if flag_double:
-			new_conv += conv(x.shape[1], 2*x.shape[1], 3, 1, 1, norm='spectral')
-			new_conv += conv(2*x.shape[1], 2*x.shape[1], 3, 1, 1, norm='spectral', size_up='down')
+			new_conv += conv(int(ch/2), ch, 3, 1, 1, norm='spectral')
+			new_conv += conv(ch, ch, 3, 1, 1, norm='spectral', size_up='down')
 		else:
-			new_conv += conv(x.shape[1], x.shape[1], 3, 1, 1,norm='spectral')
-			new_conv += conv(x.shape[1], x.shape[1], 3, 1, 1,norm='spectral', size_up='down')
+			new_conv += conv(ch, ch, 3, 1, 1,norm='spectral')
+			new_conv += conv(ch, ch, 3, 1, 1,norm='spectral', size_up='down')
 		new_conv = nn.Sequential(*new_conv).to(device)
 
 		# add new conv layers
-		discriminator.module.conv_layers.insert(0, new_conv)
+		self.conv_layers.insert(0, new_conv)
 
-		# forward to conv layers
-		for layer in self.conv_layers:
-			x = layer(x)
-
-		return x
+	def grow_stab(self, x, rindex, alpha_compo):
 
 
-	def grow_stab(self, x, rindex, alpha_compo, flag_double=False):
 		# get from_rgb parameters and names
 		fromrgb_dict = dict(self.from_rgb.named_children())
 
 		prev_rindex = rindex-1
 
-		# previous fromrgb & conv
+		# previous fromrgb
 		prev_from_rgb = fromrgb_dict['{}_rgb'.format(9-prev_rindex)]
-		prev_conv = self.conv_layers[1:]
-
-		# forward to previous fromrgb
 		prev_image = nn.AvgPool2d(2, stride=2)(x)
 		prev_feature = prev_from_rgb(prev_image)
-
-		# forward until previous conv layers
-		for layer in prev_conv:
-			prev_feature = layer(prev_feature)
 
 		# new fromrgb
 		new_rgb = fromrgb_dict['{}_rgb'.format(9-rindex)]
 		new_feature = new_rgb(x)
+		new_feature = self.conv_layers[0](new_feature)
 
-		# forward to new fromrgb
-		for layer in self.conv_layers:
-			new_feature = layer(new_feature)
-
-		# alpha composition
 		output = (1 - alpha_compo) * prev_feature + alpha_compo * new_feature
+
+		# forward until previous conv layers
+		for layer in self.conv_layers[1:]:
+			output = layer(output)
+			# if rindex == 5:
+			# 	print(output)
+			# 	import pdb; pdb.set_trace()
+			# 	print()
+
 		return output
 
 	def forward(self, x, rindex, alpha_compo=1):
@@ -186,12 +185,8 @@ class Discriminator(nn.Module):
 			x = self.from_rgb(x)
 			for layer in self.conv_layers:
 				x = layer(x)
-
-		elif rindex >= 1 and rindex <=3:
+		else:
 			x = self.grow_stab(x, rindex, alpha_compo)
-
-		elif rindex >=4:
-			x = self.grow_stab(x, rindex, alpha_compo, flag_double=True)
 
 		# forward to last linear layer
 		x = x.view(x.shape[0], -1)
@@ -204,22 +199,22 @@ if __name__ == '__main__':
 	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 	rindex = 0
+	rindex2batch = {0: 16, 1: 16, 2: 16, 3: 16, 4: 16, 5: 4, 6: 4, 7: 1, 8: 1}
+
 	generator = Generator(4, 512).to(device)
 	discriminator = Discriminator(512).to(device)
 
 	generator = nn.DataParallel(generator)
 	discriminator = nn.DataParallel(discriminator)
 
-	batch_size = 4
-	real_image = torch.randn(batch_size, 3, 4, 4).to(device)
-	latent_vector = torch.randn(batch_size, 512, 1, 1).to(device)
-	real_label, fake_label = torch.ones(batch_size).to(device), torch.zeros(batch_size).to(device)
+	for i in range(8):
+		resol = pow(2, rindex+2)
 
-	rindex += 1
-	generator.module.add_new_layer(generator, latent_vector, rindex)
-	discriminator.module.add_new_layer(discriminator, real_image, rindex)
+		batch_size = rindex2batch[rindex]
+		real_image = torch.randn(batch_size, 3, resol, resol).to(device)
+		latent_vector = torch.randn(batch_size, 512, 1, 1).to(device)
+		real_label, fake_label = torch.ones(batch_size).to(device), torch.zeros(batch_size).to(device)
 
-	print('generator', generator)
-	print('discriminator', discriminator)
-
-	import pdb; pdb.set_trace()
+		rindex += 1
+		generator.module.add_new_layer(generator, latent_vector, rindex)
+		discriminator.module.add_new_layer(discriminator, real_image, rindex)

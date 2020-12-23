@@ -33,6 +33,7 @@ d_optimizer = optim.Adam(discriminator.parameters(), lr = args.lr, betas = (0, 0
 
 # criterion = nn.MSELoss()
 criterion = nn.BCELoss()
+# criterion = nn.DataParallel(criterion)
 
 # making logging folders/tensorboard
 os.makedirs('random_images', exist_ok=True)
@@ -40,15 +41,25 @@ os.makedirs('fixed_images', exist_ok=True)
 os.makedirs('model', exist_ok=True)
 writer = SummaryWriter()
 
-
 step = 0
 total_step = 9 * (2 * args.stab_iter)
 train_data.renew(initial=True)
 fixed_vector = torch.randn(train_data.batch_size, args.z_dim, 1, 1).to(device)
 
 if args.retrain:
+	step += args.stab_iter * 2
+	print('loading pretraind network...')
 	generator.load_state_dict(torch.load( f'model/generator_{args.retrain_resol}*{args.retrain_resol}_latest.pt'))
 	discriminator.load_state_dict(torch.load( f'model/discriminator_{args.retrain_resol}*{args.retrain_resol}_latest.pt'))
+
+	latent_vector = torch.randn(train_data.batch_size, args.z_dim, 1, 1).to(device)
+	real_image, _ = next(iter(train_data.train_loader))
+	real_image = real_image.to(device)
+
+	# increasing resolution
+	train_data.renew()
+	generator.module.add_new_layer(generator, latent_vector, train_data.rindex)
+	discriminator.module.add_new_layer(discriminator, real_image, train_data.rindex)
 
 print(f'Start training PGGAN with total_step of {total_step}')
 prev_time = time.time()
@@ -63,18 +74,23 @@ while step < total_step:
 	grow_end = grow_start + args.stab_iter
 	stab_end = grow_end + args.stab_iter
 
-	real_image, _ = next(iter(train_data.train_loader))
+	real_image = next(iter(train_data.train_loader))
 	real_image = real_image.to(device)
 	latent_vector = torch.randn(train_data.batch_size, args.z_dim, 1, 1).to(device)
 	real_label, fake_label = torch.ones(train_data.batch_size).to(device), torch.zeros(train_data.batch_size).to(device)
 
 	# alpha compo with grow/stabilize stage
 	alpha_compo = (step - (grow_start))/args.stab_iter
-	if step >= grow_end and step<=stab_end : alpha_compo = 1.0
+	if step >= grow_end and step<=stab_end:
+		alpha_compo = 1.0
 
+	# print(f'step: {step}, grow_start: {grow_start}, alpha: {alpha_compo}')
+	# alpha_compo = 0.01
 	##################################################
 	############# UPDATE DISCRIMINATOR ###############
 	##################################################
+
+
 
 	# grow network -> grow only at first
 	fake_image = generator(latent_vector, train_data.rindex, alpha_compo=alpha_compo)
@@ -92,25 +108,25 @@ while step < total_step:
 	############# UPDATE GENERATOR ###################
 	##################################################
 
-	latent_vector = torch.randn(train_data.batch_size, args.z_dim, 1, 1).to(device)
-	fake_image = generator(latent_vector, train_data.rindex, alpha_compo= alpha_compo)
-	fake_pred = discriminator(fake_image, train_data.rindex, alpha_compo=alpha_compo).view(-1)
+	# latent_vector = torch.randn(train_data.batch_size, args.z_dim, 1, 1).to(device)
+	fake_image_new = generator(latent_vector, train_data.rindex, alpha_compo= alpha_compo)
+	fake_pred_new = discriminator(fake_image_new, train_data.rindex, alpha_compo=alpha_compo).view(-1)
 
-	g_loss = criterion(fake_pred, real_label)
+	g_loss = criterion(fake_pred_new, real_label)
 	g_loss.backward()
 	g_optimizer.step()
 
 	##################################################
 	################### LOGGING ######################
 	##################################################
-	step_left = total_step - step_left
+	step_left = total_step - step
 	time_took = time.time() - prev_time
 	time_left = datetime.timedelta(seconds=step_left * (time_took))
 	prev_time = time.time()
 
 	if step % args.print_freq == 0:
-		print(f'step: {step}, alpha: {alpha_compo}, rindex: {train_data.rindex}, d_loss: {d_loss:.4f}, g_loss: {g_loss:.4f}, time took: {time_took:.4f}, time left: {time_left:.4f}')
-
+		print(f'step: {step}, alpha: {alpha_compo}, rindex: {train_data.rindex}, d_loss: {d_loss:.4f}, g_loss: {g_loss:.4f}, time took: {time_took:.4f}')
+		print(f'time left: {time_left}')
 		writer.add_scalar("d_loss/step", d_loss.item(), step)
 		writer.add_scalar("g_loss/step", g_loss.item(), step)
 		writer.add_scalar("time/step", time_took, step)
@@ -127,14 +143,20 @@ while step < total_step:
 
 	if step % args.save_model_freq == 0:
 		# saving model with steps
-		torch.save(generator.state_dict(), f'model/{resol}*{resol}_{step}.pt')
-		torch.save(discriminator.state_dict(), f'model/{resol}*{resol}_{step}.pt')
+		torch.save(generator.state_dict(), f'model/generator_{resol}*{resol}_{step}.pt')
+		torch.save(discriminator.state_dict(), f'model/discriminator_{resol}*{resol}_{step}.pt')
 
 	##################################################
 	############# INCREASING IMAGE RESOLUTION ########
 	##################################################
+	flag_add = False
+	if step > 0 and (step + 1) % (args.stab_iter*2) == 0:
+		flag_add = True
 
-	if step > 0 and (step+1) % (args.stab_iter*2) == 0:
+	if flag_add:
+		if train_data.rindex  == 8:
+			break
+
 		print(f'Increasing resolution index: {train_data.rindex} -> {train_data.rindex+1}')
 		if train_data.rindex <8:
 			# saving latest model of the resolution
@@ -143,8 +165,13 @@ while step < total_step:
 
 			# increasing resolution
 			train_data.renew()
-			generator.module.add_new_layer(generator, latent_vector, train_data.rindex)
-			discriminator.module.add_new_layer(discriminator, real_image, train_data.rindex)
+
+			flag_half = True if train_data.rindex >= 4 else False
+			flag_double = True if train_data.rindex >= 4 else False
+
+			generator.module.add_new_layer(train_data.rindex, flag_half=flag_half)
+			discriminator.module.add_new_layer(train_data.rindex, flag_double=flag_double)
+
 
 	step += 1
 
