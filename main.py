@@ -75,7 +75,12 @@ while step < total_step:
 	grow_end = grow_start + args.stab_iter
 	stab_end = grow_end + args.stab_iter
 
-	real_image = next(train_loader)
+	try:
+		real_image = next(train_loader)
+	except:
+		train_loader = iter(train_data.train_loader)
+		real_image = next(train_loader)
+
 	real_image = real_image.to(device)
 	latent_vector = torch.randn(train_data.batch_size, args.z_dim, 1, 1).to(device)
 	real_label, fake_label = torch.ones(train_data.batch_size).to(device), torch.zeros(train_data.batch_size).to(device)
@@ -85,15 +90,9 @@ while step < total_step:
 	if step >= grow_end and step<=stab_end:
 		alpha_compo = 1.0
 
-	# print(f'step: {step}, grow_start: {grow_start}, alpha: {alpha_compo}')
-	# alpha_compo = 0.01
 	##################################################
 	############# UPDATE DISCRIMINATOR ###############
 	##################################################
-
-
-
-	# grow network -> grow only at first
 	fake_image = generator(latent_vector, train_data.rindex, alpha_compo=alpha_compo)
 	real_pred = discriminator(real_image, train_data.rindex, alpha_compo=alpha_compo).view(-1)
 	fake_pred = discriminator(fake_image.detach(), train_data.rindex).view(-1)
@@ -166,7 +165,7 @@ while step < total_step:
 
 			# increasing resolution
 			train_data.renew()
-
+			train_loader = iter(train_data.train_loader)
 			flag_half = True if train_data.rindex >= 4 else False
 			flag_double = True if train_data.rindex >= 4 else False
 
