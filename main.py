@@ -63,6 +63,7 @@ if args.retrain:
 
 print(f'Start training PGGAN with total_step of {total_step}')
 prev_time = time.time()
+train_loader = iter(train_data.train_loader)
 while step < total_step:
 
 	# clear accumulated gradients
@@ -74,7 +75,7 @@ while step < total_step:
 	grow_end = grow_start + args.stab_iter
 	stab_end = grow_end + args.stab_iter
 
-	real_image = next(iter(train_data.train_loader))
+	real_image = next(train_loader)
 	real_image = real_image.to(device)
 	latent_vector = torch.randn(train_data.batch_size, args.z_dim, 1, 1).to(device)
 	real_label, fake_label = torch.ones(train_data.batch_size).to(device), torch.zeros(train_data.batch_size).to(device)
