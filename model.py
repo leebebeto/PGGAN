@@ -78,9 +78,10 @@ class Generator(nn.Module):
 
 		# alpha composition
 		output = (1 - alpha_compo) * prev_image + alpha_compo * new_image
+		# import pdb; pdb.set_trace()
 		return output
 
-	def forward(self, x, rindex, alpha_compo=1):
+	def forward(self, x, rindex, alpha_compo):
 		if rindex == 0:
 			x = self.conv_layers(x)
 			output = self.to_rgb(x)
@@ -88,7 +89,7 @@ class Generator(nn.Module):
 		else:
 			output = self.grow_stab(x, rindex, alpha_compo)
 
-		output = nn.Tanh()(output)
+		# output = nn.Tanh()(output)
 		return output
 
 
@@ -121,7 +122,8 @@ class Discriminator(nn.Module):
 		self.from_rgb.add_module('{}_rgb'.format(9), from_rgb_layers)
 
 		# last linear layer
-		self.linear = nn.Linear(ndf, 1)
+		# self.linear = nn.Linear(ndf, 1)
+		self.linear = equalized_linear(ndf, 1)
 
 	def add_new_layer(self, rindex, flag_double=False):
 		ch = self.rindex2ch[rindex]
@@ -169,6 +171,7 @@ class Discriminator(nn.Module):
 		new_feature = self.conv_layers[0](new_feature)
 
 		output = (1 - alpha_compo) * prev_feature + alpha_compo * new_feature
+		# import pdb; pdb.set_trace()
 
 		# forward until previous conv layers
 		for layer in self.conv_layers[1:]:
@@ -180,7 +183,7 @@ class Discriminator(nn.Module):
 
 		return output
 
-	def forward(self, x, rindex, alpha_compo=1):
+	def forward(self, x, rindex, alpha_compo):
 		if rindex == 0:
 			x = self.from_rgb(x)
 			for layer in self.conv_layers:
@@ -191,7 +194,7 @@ class Discriminator(nn.Module):
 		# forward to last linear layer
 		x = x.view(x.shape[0], -1)
 		output = self.linear(x)
-		output = nn.Sigmoid()(output)
+		# output = nn.Sigmoid()(output)
 		return output
 
 

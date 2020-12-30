@@ -15,7 +15,8 @@ class Celeb_HQ(Dataset):
         0: 4 / 1: 8 / 2: 16 / 3: 32 / 4: 64 / 5: 128 / 6: 256 / 7: 512 / 8: 1024
         '''
         self.rindex = rindex
-        self.rindex2batch = {0: 16, 1: 16, 2: 16, 3: 16, 4: 16, 5: 6, 6: 6, 7: 6, 8: 6}
+        self.rindex2batch = {0: 16, 1: 16, 2: 16, 3: 8, 4: 8, 5: 6, 6: 6, 7: 6, 8: 6}
+        # self.rindex2batch = {0: 16, 1: 16, 2: 16, 3: 16, 4: 16, 5: 6, 6: 6, 7: 6, 8: 6}
         # self.rindex2batch = {0: 4, 1: 4, 2: 4, 3: 4, 4: 4, 5: 2, 6: 2, 7: 2, 8: 1}
         self.batch_size = self.rindex2batch[self.rindex]
         self.resolution = pow(2, (self.rindex+2))

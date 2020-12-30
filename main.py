@@ -17,6 +17,8 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from torchvision.utils import save_image
 
+torch.backends.cudnn.benchmark = True  # boost speed.
+
 # receive configuration
 args = arg_parse()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -31,8 +33,8 @@ discriminator = nn.DataParallel(discriminator)
 g_optimizer = optim.Adam(generator.parameters(), lr = args.lr, betas = (0, 0.99))
 d_optimizer = optim.Adam(discriminator.parameters(), lr = args.lr, betas = (0, 0.99))
 
-# criterion = nn.MSELoss()
-criterion = nn.BCELoss()
+criterion = nn.MSELoss()
+# criterion = nn.BCELoss()
 # criterion = nn.DataParallel(criterion)
 
 # making logging folders/tensorboard
@@ -90,12 +92,12 @@ while step < total_step:
 	if step >= grow_end and step<=stab_end:
 		alpha_compo = 1.0
 
-	##################################################
-	############# UPDATE DISCRIMINATOR ###############
-	##################################################
-	fake_image = generator(latent_vector, train_data.rindex, alpha_compo=alpha_compo)
-	real_pred = discriminator(real_image, train_data.rindex, alpha_compo=alpha_compo).view(-1)
-	fake_pred = discriminator(fake_image.detach(), train_data.rindex).view(-1)
+	# ##################################################
+	# ############# UPDATE DISCRIMINATOR ###############
+	# ##################################################
+	fake_image = generator(latent_vector, train_data.rindex, alpha_compo)
+	real_pred = discriminator(real_image, train_data.rindex, alpha_compo).view(-1)
+	fake_pred = discriminator(fake_image.detach(), train_data.rindex, alpha_compo).view(-1)
 
 	d_real_loss = criterion(real_pred, real_label)
 	d_fake_loss = criterion(fake_pred, fake_label)
@@ -108,9 +110,8 @@ while step < total_step:
 	############# UPDATE GENERATOR ###################
 	##################################################
 
-	# latent_vector = torch.randn(train_data.batch_size, args.z_dim, 1, 1).to(device)
-	fake_image_new = generator(latent_vector, train_data.rindex, alpha_compo= alpha_compo)
-	fake_pred_new = discriminator(fake_image_new, train_data.rindex, alpha_compo=alpha_compo).view(-1)
+	fake_image_new = generator(latent_vector, train_data.rindex, alpha_compo)
+	fake_pred_new = discriminator(fake_image_new, train_data.rindex, alpha_compo).view(-1)
 
 	g_loss = criterion(fake_pred_new, real_label)
 	g_loss.backward()
@@ -178,3 +179,27 @@ while step < total_step:
 
 
 
+
+
+	#
+	#
+	# ##################################################
+	# ############# UPDATE DISCRIMINATOR ###############
+	# ##################################################
+	# fake_image = generator(latent_vector, train_data.rindex, alpha_compo=alpha_compo)
+	# real_pred = discriminator(real_image, train_data.rindex, alpha_compo=alpha_compo).view(-1)
+	# fake_pred = discriminator(fake_image.detach(), train_data.rindex).view(-1)
+	#
+	# d_real_loss = -real_pred.mean()
+	# d_fake_loss = fake_pred.mean()
+	#
+	# # Compute loss for gradient penalty.
+	# beta = torch.rand(train_data.batch_size, 1, 1, 1).to(device)
+	# x_hat = (beta * real_image.data + (1 - beta) * fake_image.data).requires_grad_(True)
+	# d_x_hat_out = discriminator(x_hat, train_data.rindex, alpha_compo=alpha_compo)
+	# d_loss_gp = gradient_penalty(d_x_hat_out, x_hat)
+	#
+	# # Backward and optimize.
+	# d_loss = d_real_loss + d_fake_loss + 10.0 * d_loss_gp
+	# d_loss.backward()
+	# d_optimizer.step()
